@@ -1,0 +1,229 @@
+#########################
+# Groupe 5 : Challenge  #
+#########################
+### croisement
+```{r}
+croisement_order1 <- function(list1,list2){
+  n <- length(list1)
+  XP<- sample(n, 2)
+  XP1 <- min(XP)
+  XP2 <- max(XP)
+  fils <- rep(0,n)
+  fils[XP1:XP2] <- list1[XP1:XP2]
+  XP2_1 = (XP2 + 1) %% n
+  XP2_1 = ifelse(XP2_1==0,n,XP2_1)
+
+  if (XP2_1 == n) {
+    ind = c(XP2_1, 1:(XP2_1-1))}
+  else if (XP2_1 == 1){
+    ind = XP2_1:n
+  }
+  else{
+    ind = c( XP2_1:n, 1:(XP2_1-1))}
+
+  t = which(fils[ind] == 0)
+  l2 = which(!(list2[ind] %in% fils))
+
+  fils[ind[t]] = list2[ind[l2]]
+  return(fils)
+  }
+  
+```
+
+
+### methode mutation
+```{r}
+mutation_im <- function(parent, Pm){
+  fils = parent
+  alpha = runif(1)
+  if (alpha < Pm){
+    n <- length(parent)
+    XP <- sample(1:(n-1),2)
+    XP1 <- min(XP)
+    XP2 <- max(XP)
+    fils<- c(c(fils[1:XP1], rev(fils[(XP1+1):XP2])), fils[(XP2+1):n])}
+  return(fils)
+}
+```
+
+
+### Methodes de selection
+
+```{r}
+selection_tournoi <- function(fitness, select,t){
+  n <- length(fitness)
+  #print(fitness)
+  if  (t > 1 || t < 0){stop("t must in [0,1]")}
+  ind <- sample(1:n, size = floor(t * n))
+  #print(fitness[ind])
+  t<- order(fitness[ind])
+  index <- ind[t]
+  #print(fitness[ind[t]])
+  return(index[1:select])
+}
+
+```
+
+### Algorithme TSP
+```{r}
+genetics_TSP <- function(data, nb_Chrom = 20, select =  floor(dim(data)[1]/2), Pm = 0.03, iterMax = 10, Px = 0.9, t = 0.6)
+{
+  n <- dim(data)[1]
+  if (n >= 15){select = floor(n/3)}
+  
+  ### matrice des distances entre villes
+  distances <- as.matrix(dist(data))
+  fitness <- matrix(0,nrow = select,ncol = iterMax)
+  #### initialisation
+  chrom <- t(apply(matrix(0, nb_Chrom, n), 1, function(x) sample(n)))
+  fils <- t(apply(matrix(0, nb_Chrom, n), 1, function(x) sample(n)))
+            
+  for(i in 1:iterMax)
+  {
+
+    dist_tours <- rep(0, nb_Chrom)
+    for(k in 1:nb_Chrom)
+    {
+
+      for(j in 1:(n-1)){dist_tours[k] <- dist_tours[k] + distances[chrom[k,j],chrom[k,j+1]]} 
+      dist_tours[k] <- dist_tours[k] + distances[chrom[k,n],chrom[k,1]]
+    }
+
+    index_ord <- order(dist_tours)[1:select]
+    chrom[1:select, ] <- chrom[index_ord, ]
+    
+    fitness[,i] <- dist_tours[index_ord]
+    taille <- select
+    if (n >= 15) {
+      distinct <- unique(chrom[1:select,])
+    
+      taille <- nrow(distinct)
+      chrom[1:taille,] <- distinct[1:taille,]
+    }
+
+    for(k in seq(taille+1, n-1, by = 2)){
+      alpha = runif(1)
+      if (alpha < Px){
+        index = selection_tournoi(order(dist_tours)[1:select],select = 2,t = t)
+
+        chrom[k,] = mutation_im(croisement_order1(chrom[index[1],], chrom[index[2],]),Pm = Pm)
+        chrom[k+1,] = mutation_im(croisement_order1(chrom[index[2],], chrom[index[1],]),Pm = Pm)
+      }
+    }
+    if(k < n-1){
+      alpha = runif(1)
+      if (alpha < Px){
+        index = selection_tournoi(order(dist_tours)[1:select],select = 2,t = t)
+        chrom[n,] <- mutation_im(croisement_order1(chrom[index[2],], chrom[index[1],]),Pm = Pm)}
+   #chrom = fils  
+      
+    }
+    #print(dim(chrom))
+    
+
+    }
+  
+  return (list(chrom = chrom, fitness_best = fitness))#, #fils = fils))
+}
+```
+
+```{r}
+
+TSP_group5 = function(data, n_rep, limit, p_m = 0.6){
+   n <- dim(data)[1]
+   nb_chrom = 3*n
+   iterMax = floor(limit/(n_rep*nb_chrom))
+   
+   if(n == 20 & limit==10^4){  
+    nb_chrom = n
+    iterMax = floor(limit/(n_rep*nb_chrom))
+   }
+   if(n == 30 & limit==10^5){  
+    nb_chrom = 4*n
+    iterMax = floor(limit/(n_rep*nb_chrom))
+   }
+   if(n == 40 & limit==10^6){
+   iterMax = 10*n
+   nb_chrom = floor(limit/(iterMax*n_rep))
+   }
+   #print(iterMax)
+  #print(iterMax)
+  
+  resultats = matrix(0, nrow = n_rep, ncol = n)
+  fitness = c()
+  
+  for(i in 1:n_rep){
+    #print(i)
+    res <- genetics_TSP(data, iterMax = iterMax, nb_chrom, Pm = 0.6)
+    #print(length(res$fitness_best[1,]))
+    #print("-------------")
+    #print(dim(fitness))
+    
+    fitness <- c(fitness, res$fitness_best[1,iterMax])
+    resultats[i,] = res$chrom[1,]
+  }
+
+
+  return(list(fitness = fitness, resultats = resultats))
+}
+```
+##################
+LES EVALUATIONS :#
+##################
+```{r}
+# EVALUATION  pour 20
+n = 20
+villes20 <- matrix(runif(2*n), n, 2)
+res20 = TSP_group5(villes20, 5, 10^4, p_m=0.05)
+print("Distances totales des 5 essaies (parcours): ")
+res20$fitness
+```
+
+```{r}
+# EVALUATION  pour 30
+n = 30
+villes30 <- matrix(runif(2*n), n, 2)
+res30 = TSP_group5(villes30, 5, 10^5, p_m = 0.03)
+print("Distances totales des 5 essaies (parcours): ")
+res30$fitness
+```
+
+```{r}
+# EVALUATION  pour 40
+n = 40
+villes40 <- matrix(runif(2*n), n, 2)
+res40 = TSP_group5(villes40, 5, 10^6, p_m = 0.01)
+print("Distances totales des 5 essaies (parcours): ")
+res40$fitness
+```
+###########
+LES PLOTS #
+###########
+
+```{r}
+
+resultats = res30$resultats
+
+fitness = res30$fitness
+
+index = order(fitness)
+
+data = villes30
+#### PLOT
+par(mfrow = c(2,3))
+for(i in 1:5){
+  tour <- resultats[index[i],]
+    
+  plot(data[,1], data[,2], xlim = c(0,1), ylim = c(0,1))
+  for(j in 1:(length(tour)-1)){segments(x0 = data[tour[j],1],
+                                          y0 = data[tour[j],2], 
+                                          x1 = data[tour[j+1],1], 
+                                          y1 = data[tour[j+1],2], lwd = 1)}
+  segments(x0 = data[tour[length(tour)],1],
+            y0 = data[tour[length(tour)],2], 
+            x1 = data[tour[1],1], 
+            y1 = data[tour[1],2], lwd = 1)
+  title(c("fitness = ", toString(fitness[index[i]])))
+}
+```
+
